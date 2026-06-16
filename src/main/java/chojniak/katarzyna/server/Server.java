@@ -20,7 +20,7 @@ public class Server {
 
             String myIp = InetAddress.getLocalHost().getHostAddress();
             System.setProperty("java.rmi.server.hostname", myIp);
-            CommunicationServer server = new CommunicationServer(new RandomNameGenerator().next());
+            CommunicationServer server = new CommunicationServer(new RandomNameGenerator().next(), 5);
 
             Registry registry = LocateRegistry.createRegistry(rmiPort);
             registry.rebind("MonitorServer", server);
@@ -41,4 +41,5 @@ public class Server {
             System.err.println("[FATAL] Server failed to launch:");
             e.printStackTrace();
         }
-    }}
+    }
+}
