@@ -1,7 +1,8 @@
 package chojniak.katarzyna.server;
 
+import chojniak.katarzyna.CommunicationInterface;
+
 import java.net.*;
-import java.util.UUID;
 
 public class NetworkDiscovery {
     private static final String MULTICAST_GROUP = "230.0.0.1";
@@ -21,7 +22,7 @@ public class NetworkDiscovery {
         }
     }
 
-    public static void startListener(CommunicationServer server) {
+    public static void startListener(String serverId, CommunicationInterface<String> server) {
         new Thread(() -> {
             try (MulticastSocket socket = new MulticastSocket(null)) {
                 socket.setReuseAddress(true);
@@ -47,7 +48,7 @@ public class NetworkDiscovery {
                     String peerIp = parts[1];
                     int peerPort = Integer.parseInt(parts[2]);
 
-                    if (!peerId.equals(server.getServerName())) {
+                    if (!peerId.equals(serverId)) {
                         server.handleNewPeer(peerId, peerIp, peerPort);
                     }
                 }

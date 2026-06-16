@@ -4,9 +4,11 @@ import chojniak.katarzyna.CommunicationInterface;
 import chojniak.katarzyna.State;
 
 import java.rmi.RemoteException;
+import java.util.Date;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -29,6 +31,10 @@ public class DistributedLock {
 
     public DistributedLock(String name) {
         this.name = name;
+    }
+
+    public Condition newCondition() {
+        return new DistributedCondition();
     }
 
     public void acquire() throws InterruptedException {
@@ -64,6 +70,8 @@ public class DistributedLock {
         stateLock.lock();
         try {
             state = State.RELEASED;
+            requestTimestamp = Integer.MAX_VALUE;
+
             waiting = Set.copyOf(deferred);
             deferred.clear();
 
@@ -74,7 +82,7 @@ public class DistributedLock {
         waiting.forEach(this::grant);
     }
 
-    public void request(String sender, int timestamp) throws RemoteException {
+    public void request(String sender, int timestamp) {
         clock.update(timestamp);
 
         stateLock.lock();
@@ -136,5 +144,136 @@ public class DistributedLock {
 
     public void addPeer(String id, CommunicationInterface peer) {
         peers.putIfAbsent(id, peer);
+    }
+
+    private class DistributedCondition implements Condition {
+
+        private final Condition condition = stateLock.newCondition();
+
+        private void releaseForWait() {
+            DistributedLock.this.release();
+        }
+
+
+        private void reacquireAfterWait() throws InterruptedException {
+            DistributedLock.this.acquire();
+        }
+
+
+        @Override
+        public void await() throws InterruptedException {
+            releaseForWait();
+
+            stateLock.lock();
+            try {
+                condition.await();
+            } finally {
+                stateLock.unlock();
+            }
+
+            reacquireAfterWait();
+        }
+
+
+        @Override
+        public void awaitUninterruptibly() {
+            releaseForWait();
+
+            stateLock.lock();
+            try {
+                condition.awaitUninterruptibly();
+            } finally {
+                stateLock.unlock();
+            }
+
+            boolean interrupted = false;
+
+            while (true) {
+                try {
+                    reacquireAfterWait();
+                    break;
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
+            }
+
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+
+        @Override
+        public long awaitNanos(long nanosTimeout) throws InterruptedException {
+            releaseForWait();
+            long remaining;
+            stateLock.lock();
+            try {
+                remaining = condition.awaitNanos(nanosTimeout);
+            } finally {
+                stateLock.unlock();
+            }
+            reacquireAfterWait();
+            return remaining;
+        }
+
+
+        @Override
+        public boolean await(long time, TimeUnit unit) throws InterruptedException {
+            releaseForWait();
+            boolean result;
+
+            stateLock.lock();
+            try {
+                result = condition.await(time, unit);
+            } finally {
+                stateLock.unlock();
+            }
+
+            reacquireAfterWait();
+
+            return result;
+        }
+
+
+        @Override
+        public boolean awaitUntil(Date deadline) throws InterruptedException {
+            releaseForWait();
+            boolean result;
+
+            stateLock.lock();
+            try {
+                result = condition.awaitUntil(deadline);
+            } finally {
+                stateLock.unlock();
+            }
+
+            reacquireAfterWait();
+            return result;
+        }
+
+
+        @Override
+        public void signal() {
+            stateLock.lock();
+
+            try {
+                condition.signal();
+            } finally {
+                stateLock.unlock();
+            }
+        }
+
+
+        @Override
+        public void signalAll() {
+            stateLock.lock();
+
+            try {
+                condition.signalAll();
+            } finally {
+                stateLock.unlock();
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 package chojniak.katarzyna.server;
 
+import chojniak.katarzyna.CommunicationInterface;
 import org.kohsuke.randname.RandomNameGenerator;
 
 import java.net.InetAddress;
@@ -20,7 +21,8 @@ public class Server {
 
             String myIp = InetAddress.getLocalHost().getHostAddress();
             System.setProperty("java.rmi.server.hostname", myIp);
-            CommunicationServer server = new CommunicationServer(new RandomNameGenerator().next(), 5);
+            String serverId = new RandomNameGenerator().next();
+            CommunicationInterface<String> server = new CommunicationServer<>(serverId, 5);
 
             Registry registry = LocateRegistry.createRegistry(rmiPort);
             registry.rebind("MonitorServer", server);
@@ -29,13 +31,13 @@ public class Server {
             System.out.println("[READY] Communication Server is running!");
             System.out.println("[INFO] IP Address: " + myIp);
             System.out.println("[INFO] RMI Port:   " + rmiPort);
-            System.out.println("[INFO] Server ID:  " + server.getServerName());
+            System.out.println("[INFO] Server ID:  " + serverId);
             System.out.println("=================================================");
 
-            NetworkDiscovery.startListener(server);
+            NetworkDiscovery.startListener(serverId, server);
             Thread.sleep(500);
 
-            NetworkDiscovery.notifyArrival(server.getServerName(), myIp, rmiPort);
+            NetworkDiscovery.notifyArrival(serverId, myIp, rmiPort);
 
         } catch (Exception e) {
             System.err.println("[FATAL] Server failed to launch:");

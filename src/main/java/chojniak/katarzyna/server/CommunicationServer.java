@@ -13,15 +13,20 @@ public class CommunicationServer<T extends Serializable> extends UnicastRemoteOb
 
     private final String name;
     private final DistributedLock lock;
-    private final ReplicatedBufferMonitor<T> buffer;
+    private final ReplicatedBuffer<T> buffer;
+    private final DistributedMonitor<T> monitor;
 
     protected CommunicationServer(String name, int bufferCapacity) throws RemoteException {
-
         super();
         this.name = name;
         this.lock = new DistributedLock(name);
-        this.buffer = new ReplicatedBufferMonitor<>(bufferCapacity);
+        this.buffer = new ReplicatedBuffer<>(bufferCapacity);
+        this.monitor = new DistributedMonitor<>(this.lock, this.buffer);
     }
+
+    // =========================================================================
+    // CLIENT INTERFACE IMPLEMENTATION (MonitorInterface)
+    // =========================================================================
 
     @Override
     public String getServerName() throws RemoteException {
@@ -31,43 +36,31 @@ public class CommunicationServer<T extends Serializable> extends UnicastRemoteOb
     @Override
     public void put(T value) throws RemoteException {
         try {
-            lock.acquire();
-            while (buffer.isFull()) {
-                lock.release();
-                buffer.waitNotFull();
-                lock.acquire();
-            }
-            buffer.put(value);
+            monitor.put(value);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        } finally {
-            lock.release();
+            throw new RemoteException("Put operation interrupted", e);
         }
     }
 
     @Override
     public T get() throws RemoteException {
         try {
-            lock.acquire();
-            while (buffer.isEmpty()) {
-                lock.release();
-                buffer.waitNotEmpty();
-                lock.acquire();
-            }
-            return buffer.get();
+            return monitor.get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return null;
-        } finally {
-            lock.release();
+            throw new RemoteException("Get operation interrupted", e);
         }
     }
+
+    // =========================================================================
+    // PEER INTERFACE IMPLEMENTATION (CommunicationInterface)
+    // =========================================================================
 
     @Override
     public void replicatePut(T value) throws RemoteException {
         buffer.replicatePut(value);
     }
-
 
     @Override
     public void replicateGet() throws RemoteException {
@@ -84,24 +77,28 @@ public class CommunicationServer<T extends Serializable> extends UnicastRemoteOb
         lock.agree(sender, timestamp);
     }
 
+    // =========================================================================
+    // CLUSTER DISCOVERY
+    // =========================================================================
+
     @Override
-    public synchronized void registerPeer(String name, CommunicationInterface<T> peer) throws RemoteException {
-        lock.addPeer(name, peer);
-        buffer.addPeer(peer);
-        System.out.println("[PEER] registered " + name);
+    public void registerPeer(String peerName, CommunicationInterface<T> peerStub) throws RemoteException {
+        lock.addPeer(peerName, peerStub);
+        buffer.addPeer(peerStub);
+        System.out.println("[CLUSTER] Peer successfully linked: " + peerName);
     }
 
     @Override
     public void handleNewPeer(String peerId, String peerIp, int peerPort) throws RemoteException {
         try {
-
             Registry registry = LocateRegistry.getRegistry(peerIp, peerPort);
-            CommunicationInterface<T> peer = (CommunicationInterface) registry.lookup("MonitorServer");
-            registerPeer(peerId, peer);
+            CommunicationInterface<T> peerStub = (CommunicationInterface<T>) registry.lookup("MonitorServer");
 
-            peer.registerPeer(name, this);
+            registerPeer(peerId, peerStub);
+            peerStub.registerPeer(this.name, this);
+
         } catch (Exception e) {
-            System.err.println("Peer registration failed: " + peerId);
+            System.err.println("[CLUSTER] Failed to connect to bootstrapper peer: " + e);
         }
     }
 }
