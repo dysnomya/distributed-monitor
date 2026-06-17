@@ -1,22 +1,22 @@
 package chojniak.katarzyna.server;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class LogicalClock {
-    private final AtomicInteger clock = new AtomicInteger(0);
+    private final AtomicLong clock = new AtomicLong(0);
 
-    public int increment() {
+    public long increment() {
         return clock.incrementAndGet();
     }
 
-    public int getValue() {
+    public long getValue() {
         return clock.get();
     }
 
-    public int update(int incomingTimestamp) {
+    public long update(long incomingTimestamp) {
         while (true) {
-            int current = clock.get();
-            int next = Math.max(current, incomingTimestamp) + 1;
+            long current = clock.get();
+            long next = Math.max(current, incomingTimestamp) + 1;
 
             if (clock.compareAndSet(current, next)) {
                 // break

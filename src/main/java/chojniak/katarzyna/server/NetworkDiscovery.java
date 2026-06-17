@@ -1,7 +1,5 @@
 package chojniak.katarzyna.server;
 
-import chojniak.katarzyna.CommunicationInterface;
-
 import java.net.*;
 
 public class NetworkDiscovery {
@@ -22,7 +20,7 @@ public class NetworkDiscovery {
         }
     }
 
-    public static void startListener(String serverId, CommunicationInterface<String> server) {
+    public static void startListener(String serverId, DistributedServer server) {
         new Thread(() -> {
             try (MulticastSocket socket = new MulticastSocket(null)) {
                 socket.setReuseAddress(true);

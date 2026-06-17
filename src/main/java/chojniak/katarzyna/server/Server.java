@@ -1,6 +1,5 @@
 package chojniak.katarzyna.server;
 
-import chojniak.katarzyna.CommunicationInterface;
 import org.kohsuke.randname.RandomNameGenerator;
 
 import java.net.InetAddress;
@@ -21,9 +20,10 @@ public class Server {
 
             String myIp = InetAddress.getLocalHost().getHostAddress();
             System.setProperty("java.rmi.server.hostname", myIp);
-            String serverId = new RandomNameGenerator().next();
-            CommunicationInterface<String> server = new CommunicationServer<>(serverId, 5);
 
+            String serverId = new RandomNameGenerator().next();
+
+            DistributedServer server = new DistributedServer(serverId);
             Registry registry = LocateRegistry.createRegistry(rmiPort);
             registry.rebind("MonitorServer", server);
 
